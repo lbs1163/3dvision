@@ -3,6 +3,7 @@
 import cv2 as cv
 import numpy as np
 import open3d as o3d
+from matplotlib import pyplot as plt
 
 def task_1_3_extract_and_match_features(img1, img2):
     orb = cv.ORB_create()
@@ -33,7 +34,7 @@ def task_1_3_extract_and_match_features(img1, img2):
 
     cv.imwrite('./output/orb_matching.png', img3)
 
-    return matches, keypoints1, keypoints2
+    return matches, keypoints1, keypoints2, img3
 
 def task_1_4_compute_fundamental_matrix(matches, kp1, kp2, img1, img2):
     good = []
@@ -119,8 +120,38 @@ if __name__ == "__main__":
     img1 = cv.imread('./data/lab1.jpg', cv.IMREAD_GRAYSCALE)
     img2 = cv.imread('./data/lab2.jpg', cv.IMREAD_GRAYSCALE)
 
-    matches, kp1, kp2 = task_1_3_extract_and_match_features(img1, img2)
+    matches, kp1, kp2, matched_img = task_1_3_extract_and_match_features(img1, img2)
     F, epipolar_lines_1, epipolar_lines_2 = task_1_4_compute_fundamental_matrix(matches, kp1, kp2, img1, img2)
     E = task_1_5_compute_essential_matrix(F, K)
     R1, R2, t = task_1_6_get_camera_poses(E)
     rect1, rect2 = task_2_1_rectify_images(K, R1, t, distCoeffs, epipolar_lines_1, epipolar_lines_2)
+
+    plt.imshow(matched_img)
+    plt.show()
+
+    print('Fundamental Matrix F:')
+    print(F)
+
+    plt.imshow(epipolar_lines_1)
+    plt.show()
+
+    plt.imshow(epipolar_lines_2)
+    plt.show()
+
+    print('Essential Matrix E:')
+    print(E)
+
+    print('Camera Rotation Candidate R1:')
+    print(R1)
+
+    print('Camera Rotation Candidate R2:')
+    print(R2)
+
+    print('Camera Transition t:')
+    print(t)
+
+    plt.imshow(rect1)
+    plt.show()
+
+    plt.imshow(rect2)
+    plt.show()
