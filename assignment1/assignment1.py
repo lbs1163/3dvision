@@ -48,7 +48,7 @@ def task_1_4_compute_fundamental_matrix(matches, kp1, kp2, img1, img2):
     
     pts1 = np.int32(pts1)
     pts2 = np.int32(pts2)
-    F, mask = cv.findFundamentalMat(pts1, pts2, cv.FM_LMEDS)
+    F, mask = cv.findFundamentalMat(pts1, pts2, cv.FM_RANSAC)
 
     pts1 = pts1[mask.ravel()==1]
     pts2 = pts2[mask.ravel()==1]
@@ -79,11 +79,48 @@ def task_1_4_compute_fundamental_matrix(matches, kp1, kp2, img1, img2):
     cv.imwrite('./output/epipolar_lines_1.png', img5)
     cv.imwrite('./output/epipolar_lines_2.png', img3)
     
-    return F
+    return F, img5, img3
+
+def task_1_5_compute_essential_matrix(F, K):
+    return np.matmul(np.matmul(np.transpose(K), F), K)
+
+def task_1_6_get_camera_poses(E):
+    U, S, Vt = np.linalg.svd(E, full_matrices=True)
+    W = np.array([[0, -1, 0],
+                  [1, 0, 0],
+                  [0, 0, 1]])
+    R1 = np.matmul(np.matmul(U, W), Vt)
+    R2 = np.matmul(np.matmul(U, np.transpose(W)), Vt)
+    u3 = U[:, 2]
+
+    return R1, R2, u3
+
+def task_2_1_rectify_images(K, R, t, distCoeffs, img1, img2):
+    rectify_params = dict(alpha = 1.0, flags=0)
+    R1, R2, P1, P2, Q, roi1, roi2 = cv.stereoRectify(K, distCoeffs, K, distCoeffs, (img1.shape[1], img1.shape[0]), R, t, **rectify_params)
+
+    map1, map2 = cv.initUndistortRectifyMap(K, distCoeffs, R1, P1, (img1.shape[1], img1.shape[0]), cv.CV_32FC1)
+    map3, map4 = cv.initUndistortRectifyMap(K, distCoeffs, R2, P2, (img2.shape[1], img2.shape[0]), cv.CV_32FC1)
+
+    rect1 = cv.remap(img1, map1, map2, cv.INTER_NEAREST)
+    rect2 = cv.remap(img2, map3, map4, cv.INTER_NEAREST)
+
+    cv.imwrite('./output/rectified_1.png', rect1)
+    cv.imwrite('./output/rectified_2.png', rect2)
+
+    return rect1, rect2
 
 if __name__ == "__main__":
+    K = np.array([[1112.60959, 0.0, 724.315664],
+                  [0.0, 1122.20828, 520.183459],
+                  [0.0, 0.0, 1.0]])
+    distCoeffs = np.transpose([0.28864512, -1.51224766, -0.00702437, 0.00289229, 2.43952476])
+
     img1 = cv.imread('./data/lab1.jpg', cv.IMREAD_GRAYSCALE)
     img2 = cv.imread('./data/lab2.jpg', cv.IMREAD_GRAYSCALE)
 
     matches, kp1, kp2 = task_1_3_extract_and_match_features(img1, img2)
-    F = task_1_4_compute_fundamental_matrix(matches, kp1, kp2, img1, img2)
+    F, epipolar_lines_1, epipolar_lines_2 = task_1_4_compute_fundamental_matrix(matches, kp1, kp2, img1, img2)
+    E = task_1_5_compute_essential_matrix(F, K)
+    R1, R2, t = task_1_6_get_camera_poses(E)
+    rect1, rect2 = task_2_1_rectify_images(K, R1, t, distCoeffs, epipolar_lines_1, epipolar_lines_2)
