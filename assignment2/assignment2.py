@@ -5,26 +5,56 @@ import numpy as np
 import open3d as o3d
 from matplotlib import pyplot as plt
 
-def task_1_3_apply_filters(filename1, filename2):
-    color_raw = o3d.io.read_image("./data/image00834.png")
-    depth_raw = o3d.io.read_image("./data/depth00834.png")
+def task_1_3_apply_filters(file_color1, file_depth1, file_color2, file_depth2):
+    def read(color, depth):
+        color_raw = o3d.io.read_image(file_color1)
+        depth_raw = o3d.io.read_image(file_depth1)
 
-    color_gaussian = cv.GaussianBlur(np.asarray(color_raw), (3, 3), 0)
-    depth_gaussian = cv.GaussianBlur(np.asarray(depth_raw), (3, 3), 0)
+        color_gaussian = cv.GaussianBlur(np.asarray(color_raw), (3, 3), 0)
 
-    color_sobel = cv.Sobel(np.asarray(color_raw), -1, 1, 0)
-    depth_sobel = cv.Sobel(np.asarray(depth_raw), -1, 1, 1)
+        color_sobel_dx = cv.Sobel(np.asarray(color_raw), -1, 1, 0)
+        color_sobel_dy = cv.Sobel(np.asarray(color_raw), -1, 0, 1)
 
-    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_raw, depth_raw)
-    rgbd_image_gaussian = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(color_gaussian), o3d.geometry.Image(depth_gaussian))
+        return {
+            "color": {
+                "raw": color_raw,
+                "gaussian": color_gaussian,
+                "sobel": {
+                    "dx": color_sobel_dx,
+                    "dy": color_sobel_dy
+                }
+            },
+            "depth": depth_raw
+        }
 
-    plt.subplot(1, 2, 1)
-    plt.imshow(color_raw)
-    plt.subplot(1, 2, 2)
-    plt.imshow(color_sobel)
-    plt.show()
-
-    return
+    return [read(file_color1, file_depth1), read(file_color2, file_depth2)];
 
 if __name__ == "__main__":
-    task_1_3_apply_filters("a", "b")
+    images = task_1_3_apply_filters(
+        "./data/image00834.png", "./data/depth00834.png",
+        "./data/image00894.png", "./data/depth00894.png"
+    )
+
+    plt.subplot(2, 3, 1)
+    plt.imshow(images[0]["color"]["raw"])
+    plt.subplot(2, 3, 2)
+    plt.imshow(images[0]["color"]["gaussian"])
+    plt.subplot(2, 3, 3)
+    plt.imshow(images[0]["depth"])
+    plt.subplot(2, 3, 5)
+    plt.imshow(images[0]["color"]["sobel"]["dx"])
+    plt.subplot(2, 3, 6)
+    plt.imshow(images[0]["color"]["sobel"]["dy"])
+    plt.show()
+
+    plt.subplot(2, 3, 1)
+    plt.imshow(images[1]["color"]["raw"])
+    plt.subplot(2, 3, 2)
+    plt.imshow(images[1]["color"]["gaussian"])
+    plt.subplot(2, 3, 3)
+    plt.imshow(images[1]["depth"])
+    plt.subplot(2, 3, 5)
+    plt.imshow(images[1]["color"]["sobel"]["dx"])
+    plt.subplot(2, 3, 6)
+    plt.imshow(images[1]["color"]["sobel"]["dy"])
+    plt.show()
