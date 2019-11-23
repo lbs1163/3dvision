@@ -12,10 +12,10 @@ c_y = 239.5
 
 def task_1_3_apply_filters(file_color1, file_depth1, file_color2, file_depth2):
     def read(color, depth):
-        color_raw = o3d.io.read_image(file_color1)
-        depth_raw = o3d.io.read_image(file_depth1)
+        color_raw = o3d.io.read_image(color)
+        depth_raw = o3d.io.read_image(depth)
 
-        grayscale_raw = cv.cvtColor(np.asarray(color_raw), cv.COLOR_BGR2GRAY)
+        grayscale_raw = cv.cvtColor(np.asarray(color_raw), cv.COLOR_BGR2GRAY) / 255
 
         grayscale_gaussian = cv.GaussianBlur(grayscale_raw, (3, 3), 0)
 
@@ -90,33 +90,36 @@ def task_1_5_find_transformation_matrix(images):
     xi = np.array([0, 0, 0, 0, 0, 0])
 
     source_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(images["j"]["color_raw"], images["j"]["depth_raw"])
-    target_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(images["j"]["color_raw"], images["j"]["depth_raw"])
+    target_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(images["i"]["color_raw"], images["i"]["depth_raw"])
 
-    source = o3d.geometry.PointCloud.create_from_rgbd_image(
+    source_raw = o3d.geometry.PointCloud.create_from_rgbd_image(
         source_rgbd, o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
     )
-    target = o3d.geometry.PointCloud.create_from_rgbd_image(
+    target_raw = o3d.geometry.PointCloud.create_from_rgbd_image(
         target_rgbd, o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
     )
+
+    source = source_raw.voxel_down_sample(voxel_size=0.02)
+    target = target_raw.voxel_down_sample(voxel_size=0.02)
 
     source.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
     target.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
-    vis.add_geometry(source)
-    vis.add_geometry(target)
+    #vis = o3d.visualization.Visualizer()
+    #vis.create_window()
+    #vis.add_geometry(source)
+    #vis.add_geometry(target)
 
     T = np.identity(4)
 
-    for i in range(0, 10):
+    for i in range(0, 20):
         J_r, I_j, u, v = task_1_4_calculate_jacobian_matrix(images["j"], T)
 
         r = np.zeros(I_j.size)
 
         for j in range(0, I_j.size):
-            x = round(u[i])
-            y = round(v[i])
+            x = round(u[j])
+            y = round(v[j])
 
             [h, w] = images["i"]["grayscale"]["gaussian"].shape
 
@@ -125,9 +128,15 @@ def task_1_5_find_transformation_matrix(images):
             else:
                 I_i = images["i"][y][x]
             
-            r[i] = I_i - I_j[j]
+            r[j] = I_i - I_j[j]
+        
+        print(r, r.shape)
+        print(J_r.shape, r.shape, np.transpose(J_r) @ r)
 
         xi = xi - np.linalg.inv(np.transpose(J_r) @ J_r) @ np.transpose(J_r) @ r
+
+        print(xi)
+        print(np.sum(r ** 2))
 
         T = np.array([
             [     1, -xi[2],  xi[1], xi[3]],
@@ -137,14 +146,12 @@ def task_1_5_find_transformation_matrix(images):
         ])
 
         source.transform(T)
-        vis.update_geometry()
-        vis.poll_events()
-        vis.update_renderer()
+        #o3d.visualization.draw_geometries([source, target])
 
     return T
 
 if __name__ == "__main__":
-    show_results = False
+    show_results = True
 
     images = task_1_3_apply_filters(
         "./data/image00834.png", "./data/depth00834.png",
@@ -177,3 +184,18 @@ if __name__ == "__main__":
         plt.subplot(2, 3, 6)
         plt.imshow(images["j"]["grayscale"]["sobel"]["dy"])
         plt.show()
+
+        source_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(images["j"]["color_raw"], images["j"]["depth_raw"])
+        target_rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(images["i"]["color_raw"], images["i"]["depth_raw"])
+
+        source = o3d.geometry.PointCloud.create_from_rgbd_image(
+            source_rgbd, o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+        )
+        target = o3d.geometry.PointCloud.create_from_rgbd_image(
+            target_rgbd, o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+        )
+
+        source.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        target.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        
+        o3d.visualization.draw_geometries([source, target])
