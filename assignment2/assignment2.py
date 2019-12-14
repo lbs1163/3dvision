@@ -105,10 +105,10 @@ def task_1_5_find_transformation_matrix(images, xi, f_x, f_y, c_x, c_y):
         target_rgbd, o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
     )
 
-    #vis = o3d.visualization.Visualizer()
-    #vis.create_window()
-    #vis.add_geometry(source)
-    #vis.add_geometry(target)
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    vis.add_geometry(source)
+    vis.add_geometry(target)
 
     for i in range(0, 1000):
         J_r, I_j, u, v = task_1_4_calculate_jacobian_matrix(images["j"], xi, f_x, f_y, c_x, c_y)
@@ -130,14 +130,14 @@ def task_1_5_find_transformation_matrix(images, xi, f_x, f_y, c_x, c_y):
         
         xi = xi - np.linalg.inv(np.transpose(J_r) @ J_r) @ np.transpose(J_r) @ r
 
-        print(xi)
-        print(np.sum(r ** 2))
+        #print(xi)
+        #print(np.sum(r ** 2))
 
-        #source.transform(inverse)
-        #source.transform(T)
-        #vis.update_geometry()
-        #vis.poll_events()
-        #vis.update_renderer()
+        source.transform(inverse)
+        source.transform(T)
+        vis.update_geometry()
+        vis.poll_events()
+        vis.update_renderer()
 
     return xi
 
