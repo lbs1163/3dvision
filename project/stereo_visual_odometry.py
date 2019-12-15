@@ -32,6 +32,29 @@ def rotationMatrixToEulerAngles(R):
 
     return x, y, z
 
+def generate3DPoints(points_2d_left, points_2d_right, P0, P1):
+    numPoints = points_2d_left.shape[0]
+    points_3d = np.zeros((numPoints, 3))
+
+    for i in range(numPoints):
+        pLeft = points_2d_left[i,:]
+        pRight = points_2d_right[i,:]
+
+        X = np.zeros((4,4))
+        X[0,:] = pLeft[0] * P0[2,:] - P0[0,:]
+        X[1,:] = pLeft[1] * P0[2,:] - P0[1,:]
+        X[2,:] = pRight[0] * P1[2,:] - P1[0,:]
+        X[3,:] = pRight[1] * P1[2,:] - P1[1,:]
+
+        [u,s,v] = np.linalg.svd(X)
+        v = v.transpose()
+        vSmall = v[:,-1]
+        vSmall /= vSmall[-1]
+
+        points_3d[i, :] = vSmall[0:-1]
+
+    return points_3d
+
 def find_rotation_and_translation(matching_3d_points):
     matching_3d_points = np.array(matching_3d_points)
 
@@ -86,13 +109,13 @@ def ransac(data, estimate, is_inlier, sample_size, goal_inliers, max_iterations,
     return best_model, best_ic
 
 if __name__ == "__main__":
-    debug = False
-    save_image = True
+    debug = True
+    save_image = False
     use_stereo = True
 
     sequence = 0
     start_frame = 0
-    end_frame = 1
+    end_frame = 1000
 
     max_iterations = 1
     sample_size = 6
@@ -119,9 +142,7 @@ if __name__ == "__main__":
     orb = cv.ORB_create()
     bf = cv.BFMatcher()
     block = 11
-    P1 = block * block * 8
-    P2 = block * block * 32
-    stereo = cv.StereoSGBM_create(minDisparity=0,numDisparities=32, blockSize=block, P1=P1, P2=P2)
+    stereo = cv.StereoSGBM_create(minDisparity=0,numDisparities=32, blockSize=block, P1=block*block*8, P2=block*block*32)
 
     image_before_left = None
     image_before_right = None
@@ -156,10 +177,24 @@ if __name__ == "__main__":
     sway_fig = plt.subplot(6, 1, 5)
     heave_fig = plt.subplot(6, 1, 6)
 
+    roll_fig.set_ylim([-0.03, 0.03])
+    pitch_fig.set_ylim([-0.1, 0.1])
+    yaw_fig.set_ylim([-0.02, 0.03])
+    surge_fig.set_ylim([-0.4, 0.4])
+    sway_fig.set_ylim([-0.1, 0.1])
+    heave_fig.set_ylim([-0.1, 1.5])
+
+    roll_fig.set_ylabel("roll")
+    pitch_fig.set_ylabel("pitch")
+    yaw_fig.set_ylabel("yaw")
+    surge_fig.set_ylabel("surge")
+    sway_fig.set_ylabel("sway")
+    heave_fig.set_ylabel("heave")
+
     for frame_before in range(start_frame, end_frame):
 
         ### load images and extract features from only left images
-
+        
         if frame_before == start_frame:
             image_before_left = cv.imread(left_image_path + '{0:06d}'.format(frame_before) + '.png', 0)
             image_before_right = cv.imread(right_image_path + '{0:06d}'.format(frame_before) + '.png', 0)
@@ -183,7 +218,7 @@ if __name__ == "__main__":
         image_after_right = cv.imread(right_image_path + '{0:06d}'.format(frame_before + 1) + '.png', 0)
 
         keypoints_after_left, descriptors_after_left = orb.detectAndCompute(image_after_left, None)
-        disparity_after = stereo.compute(image_after_left, image_after_right)
+        disparity_after = np.divide(stereo.compute(image_after_left, image_after_right).astype(np.float32), 16.0)
 
         if save_image:
             image_after_left_with_keypoints = cv.drawKeypoints(image_after_left, keypoints_after_left, None, color=(0, 255, 0), flags=0)
@@ -225,28 +260,39 @@ if __name__ == "__main__":
         R, t = None, None
         
         if use_stereo:
-            matching_points_3d = []
+            matching_points_left_before = []
+            matching_points_right_before = []
+            matching_points_left_after = []
+            matching_points_right_after = []
 
             for i in range(matching_points_before_left.shape[0]):
-                point_before = matching_points_before_left[i]
-                point_after = matching_points_after_left[i]
+                point_before_left = matching_points_before_left[i]
+                point_after_left = matching_points_after_left[i]
 
-                point_disparity_before = disparity_before[point_before[1], point_before[0]]
-                point_disparity_after = disparity_after[point_after[1], point_after[0]]
+                point_disparity_before = disparity_before[point_before_left[1], point_before_left[0]]
+                point_disparity_after = disparity_after[point_after_left[1], point_after_left[0]]
 
-                if point_disparity_before > 0 and point_disparity_after > 0:
-                    point_depth_before = (baseline * focal_left) / point_disparity_before
-                    point_depth_after = (baseline * focal_left) / point_disparity_after
+                if point_disparity_before > 0.0 and point_disparity_before < 100.0 and point_disparity_after > 0 and point_disparity_after < 100.0:
+                    point_before_right = np.copy(point_before)
+                    point_before_right[0] = point_before_right[0] - point_disparity_before
 
-                    matching_points_3d.append(np.array([
-                        (point_before[1] - pp_left[0]) * point_depth_before / focal_left,
-                        (point_before[0] - pp_left[1]) * point_depth_before / focal_left,
-                        point_depth_before,
-                        (point_after[1] - pp_left[0]) * point_depth_after / focal_left,
-                        (point_after[0] - pp_left[1]) * point_depth_after / focal_left,
-                        point_depth_after,
-                    ]))
-                            
+                    point_after_right = np.copy(point_after)
+                    point_after_right[0] = point_after_right[0] - point_disparity_before
+
+                    matching_points_left_before.append(point_before)
+                    matching_points_right_before.append(point_before_right)
+                    matching_points_left_after.append(point_after)
+                    matching_points_right_after.append(point_after_right)
+            
+            matching_points_left_before = np.array(matching_points_left_before)
+            matching_points_right_before = np.array(matching_points_right_before)
+            matching_points_left_after = np.array(matching_points_left_after)
+            matching_points_right_after = np.array(matching_points_right_after)
+
+            matching_points_3d_before = generate3DPoints(matching_points_left_before, matching_points_right_before, projection_matrix_left, projection_matrix_right)
+            matching_points_3d_after = generate3DPoints(matching_points_left_after, matching_points_right_after, projection_matrix_left, projection_matrix_right)
+            matching_points_3d = np.transpose(np.hstack((matching_points_3d_before, matching_points_3d_after)))            
+                                            
             (R, t), ic = ransac(
                 matching_points_3d,
                 find_rotation_and_translation,
@@ -263,7 +309,7 @@ if __name__ == "__main__":
             inlier_matching_points_after_left = matching_points_after_left[mask.ravel()==1]
 
             _, R, t, mask = cv.recoverPose(E, inlier_matching_points_after_left, inlier_matching_points_before_left, focal=focal_left, pp=pp_left)
-        
+
         ### calculate euler angles from rotation matrix
             
         roll, pitch, yaw = rotationMatrixToEulerAngles(R)
@@ -307,7 +353,7 @@ if __name__ == "__main__":
             sway_gt_arr[frame_before - start_frame] = sway_gt
             heave_gt_arr[frame_before - start_frame] = heave_gt
             
-            if frame_before % 10 == 0:
+            if frame_before % 100 == 0:
 
                 roll_fig.plot(roll_arr[0:frame_before-start_frame+1], 'b')
                 roll_fig.plot(roll_gt_arr[0:frame_before-start_frame+1], 'r')
