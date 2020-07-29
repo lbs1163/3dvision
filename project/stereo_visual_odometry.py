@@ -109,9 +109,9 @@ def ransac(data, estimate, is_inlier, sample_size, goal_inliers, max_iterations,
     return best_model, best_ic
 
 if __name__ == "__main__":
-    debug = True
-    save_image = False
-    use_stereo = True
+    debug = True # shows the plot for camera motion in 6 channels
+    save_image = False # saves images in each part
+    use_stereo = True # If True, it uses stereo visual odometry. If False, it uses monocular visual odometry.
 
     sequence = 0
     start_frame = 0
